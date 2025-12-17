@@ -316,19 +316,26 @@ app.get('/api/attendance/active-session/:classId', auth, async (req, res) => {
 
 app.post('/api/attendance/generate-qr/:classId', auth, async (req, res) => {
   try {
+    console.log('Generate QR for classId:', req.params.classId, 'by user:', req.user._id);
     const classItem = await Class.findById(req.params.classId);
-    if (!classItem) return res.status(404).json({ message: 'Class not found' });
+    if (!classItem) {
+      console.log('Class not found:', req.params.classId);
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    console.log('Class teacher:', classItem.teacher, 'Request user:', req.user._id);
     if (classItem.teacher.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Only the class teacher can generate QR codes' });
     }
-    const qrData = { classId: classItem._id, timestamp: Date.now(), random: Math.random().toString(36).substring(7) };
+    const qrData = { classId: classItem._id.toString(), timestamp: Date.now(), random: Math.random().toString(36).substring(7) };
     const qrCode = Buffer.from(JSON.stringify(qrData)).toString('base64');
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const qrSession = new QRSession({ classId: classItem._id, qrCode, expiresAt });
     await qrSession.save();
+    console.log('QR Session created:', qrSession._id);
     res.json({ qrCode, expiresAt, sessionId: qrSession._id });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Generate QR error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
   }
 });
 
