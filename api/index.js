@@ -68,6 +68,7 @@ const classSchema = new mongoose.Schema({
 const qrSessionSchema = new mongoose.Schema({
   classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
   qrCode: { type: String, required: true },
+  sessionCode: { type: String, default: () => Math.random().toString(36).substring(2, 15) },
   expiresAt: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now }
 });
