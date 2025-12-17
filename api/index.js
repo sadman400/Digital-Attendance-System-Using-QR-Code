@@ -1,11 +1,10 @@
 const path = require('path');
-
-// Set up module resolution for backend files
-const backendPath = path.join(__dirname, '..', 'backend');
-
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+
+// Set up module resolution for backend files
+const backendPath = path.join(__dirname, '..', 'backend');
 
 const app = express();
 
@@ -16,36 +15,46 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// MongoDB connection with caching for serverless
-let cachedConnection = null;
+// MongoDB connection - Vercel recommended pattern with global caching
+const MONGODB_URI = process.env.MONGODB_URI;
 
-const connectDB = async () => {
-  if (cachedConnection && mongoose.connection.readyState === 1) {
-    console.log('Using cached MongoDB connection');
-    return cachedConnection;
+if (!MONGODB_URI) {
+  throw new Error('Please define MONGODB_URI environment variable');
+}
+
+let cached = global.mongoose;
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+async function connectDB() {
+  if (cached.conn) {
+    return cached.conn;
   }
-  
-  try {
-    // Clear any existing models to prevent OverwriteModelError
-    if (mongoose.connection.readyState === 0) {
-      mongoose.set('strictQuery', false);
-    }
-    
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      bufferCommands: true,
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+    };
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      return mongoose;
     });
-    
-    cachedConnection = conn;
-    console.log('New MongoDB connection established');
-    return conn;
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
-    cachedConnection = null;
-    throw err;
   }
-};
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+
+  return cached.conn;
+}
+
+// Import routes
+const authRoutes = require(path.join(backendPath, 'routes', 'auth'));
+const classRoutes = require(path.join(backendPath, 'routes', 'class'));
+const attendanceRoutes = require(path.join(backendPath, 'routes', 'attendance'));
 
 // Middleware to connect to DB before each request
 app.use(async (req, res, next) => {
@@ -58,11 +67,6 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Import routes AFTER middleware (so connection is established first)
-const authRoutes = require(path.join(backendPath, 'routes', 'auth'));
-const classRoutes = require(path.join(backendPath, 'routes', 'class'));
-const attendanceRoutes = require(path.join(backendPath, 'routes', 'attendance'));
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/classes', classRoutes);
@@ -72,7 +76,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.get('/api/health', async (req, res) => {
   try {
     await connectDB();
-    res.json({ status: 'ok', message: 'Server is running', db: 'connected' });
+    res.json({ status: 'ok', message: 'Server is running', db: mongoose.connection.readyState });
   } catch (err) {
     res.json({ status: 'error', message: err.message });
   }
