@@ -23,16 +23,28 @@ const connectDB = async () => {
   if (cachedDb && mongoose.connection.readyState === 1) {
     return cachedDb;
   }
+
+  // Disconnect if in a bad state
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
   
   try {
+    mongoose.set('bufferCommands', false);
+    
     const db = await mongoose.connect(process.env.MONGODB_URI, {
-      bufferCommands: false,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      minPoolSize: 1,
     });
+    
     cachedDb = db;
     console.log('Connected to MongoDB');
     return db;
   } catch (err) {
     console.error('MongoDB connection error:', err);
+    cachedDb = null;
     throw err;
   }
 };
