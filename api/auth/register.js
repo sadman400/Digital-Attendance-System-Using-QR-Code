@@ -70,7 +70,21 @@ module.exports = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const user = new User({ name, email, password, role: role || 'student', studentId, department });
+    // Build user data - only include studentId if it has a value
+    const userData = { 
+      name, 
+      email, 
+      password, 
+      role: role || 'student',
+      department: department || undefined
+    };
+    
+    // Only add studentId for students and if it has a value
+    if (studentId && studentId.trim()) {
+      userData.studentId = studentId.trim();
+    }
+
+    const user = new User(userData);
     await user.save();
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
