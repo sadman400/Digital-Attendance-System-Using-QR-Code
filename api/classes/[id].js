@@ -89,6 +89,20 @@ module.exports = async (req, res) => {
       return res.status(200).json(classItem);
     }
 
+    if (req.method === 'DELETE') {
+      const classItem = await Class.findById(id);
+      if (!classItem) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      if (classItem.teacher.toString() !== user._id.toString()) {
+        return res.status(403).json({ message: 'Only the class teacher can delete this class' });
+      }
+      await Class.findByIdAndDelete(id);
+      // Also delete related QR sessions
+      await QRSession.deleteMany({ classId: id });
+      return res.status(200).json({ message: 'Class deleted successfully' });
+    }
+
     return res.status(405).json({ message: 'Method not allowed' });
   } catch (error) {
     console.error('Class detail error:', error);
