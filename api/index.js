@@ -17,42 +17,35 @@ app.use(cors({
 app.use(express.json());
 
 // MongoDB connection with caching for serverless
-let cachedDb = null;
+let cachedConnection = null;
 
 const connectDB = async () => {
-  if (cachedDb && mongoose.connection.readyState === 1) {
-    return cachedDb;
-  }
-
-  // Disconnect if in a bad state
-  if (mongoose.connection.readyState !== 0) {
-    await mongoose.disconnect();
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    console.log('Using cached MongoDB connection');
+    return cachedConnection;
   }
   
   try {
-    mongoose.set('bufferCommands', false);
+    // Clear any existing models to prevent OverwriteModelError
+    if (mongoose.connection.readyState === 0) {
+      mongoose.set('strictQuery', false);
+    }
     
-    const db = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-      minPoolSize: 1,
+      bufferCommands: true,
     });
     
-    cachedDb = db;
-    console.log('Connected to MongoDB');
-    return db;
+    cachedConnection = conn;
+    console.log('New MongoDB connection established');
+    return conn;
   } catch (err) {
     console.error('MongoDB connection error:', err);
-    cachedDb = null;
+    cachedConnection = null;
     throw err;
   }
 };
-
-// Import routes after setting up path
-const authRoutes = require(path.join(backendPath, 'routes', 'auth'));
-const classRoutes = require(path.join(backendPath, 'routes', 'class'));
-const attendanceRoutes = require(path.join(backendPath, 'routes', 'attendance'));
 
 // Middleware to connect to DB before each request
 app.use(async (req, res, next) => {
@@ -64,6 +57,11 @@ app.use(async (req, res, next) => {
     res.status(500).json({ message: 'Database connection failed', error: err.message });
   }
 });
+
+// Import routes AFTER middleware (so connection is established first)
+const authRoutes = require(path.join(backendPath, 'routes', 'auth'));
+const classRoutes = require(path.join(backendPath, 'routes', 'class'));
+const attendanceRoutes = require(path.join(backendPath, 'routes', 'attendance'));
 
 // Routes
 app.use('/api/auth', authRoutes);
