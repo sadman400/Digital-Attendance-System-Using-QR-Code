@@ -1,21 +1,11 @@
 {
   "version": 2,
-  "installCommand": "npm install --prefix frontend --include=dev && npm install --prefix backend",
+  "installCommand": "npm install --prefix frontend --include=dev && npm install --prefix api",
   "buildCommand": "npm run build --prefix frontend",
   "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/index.js": {
-      "includeFiles": "backend/**",
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
