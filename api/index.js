@@ -59,6 +59,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 const classSchema = new mongoose.Schema({
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true },
+  department: { type: String },
   teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   schedule: { day: String, time: String },
@@ -177,10 +178,10 @@ app.post('/api/classes', auth, async (req, res) => {
     if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Only teachers can create classes' });
     }
-    const { name, code, schedule } = req.body;
+    const { name, code, department, schedule } = req.body;
     const existingClass = await Class.findOne({ code });
     if (existingClass) return res.status(400).json({ message: 'Class code already exists' });
-    const newClass = new Class({ name, code, teacher: req.user._id, schedule });
+    const newClass = new Class({ name, code, department, teacher: req.user._id, schedule });
     await newClass.save();
     res.status(201).json(newClass);
   } catch (error) {
