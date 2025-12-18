@@ -1,5 +1,6 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../utils/api';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -10,18 +11,103 @@ import {
   X,
   Bell,
   Search,
-  ChevronRight
+  ChevronRight,
+  Users,
+  Calendar
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState({ classes: [], students: [] });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRef = useRef(null);
 
   const isTeacher = user?.role === 'teacher' || user?.role === 'admin';
+
+  // Close search when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Search functionality
+  useEffect(() => {
+    const searchData = async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults({ classes: [], students: [] });
+        setSearchOpen(false);
+        return;
+      }
+
+      setSearchLoading(true);
+      setSearchOpen(true);
+
+      try {
+        const response = await api.get('/classes');
+        const classes = response.data;
+        const query = searchQuery.toLowerCase();
+
+        // Filter classes by name or code
+        const filteredClasses = classes.filter(c => 
+          c.name.toLowerCase().includes(query) || 
+          c.code.toLowerCase().includes(query)
+        );
+
+        // For teachers, also search students within their classes
+        let filteredStudents = [];
+        if (isTeacher) {
+          classes.forEach(c => {
+            if (c.students) {
+              c.students.forEach(student => {
+                if (
+                  student.name?.toLowerCase().includes(query) ||
+                  student.email?.toLowerCase().includes(query) ||
+                  student.studentId?.toLowerCase().includes(query)
+                ) {
+                  // Avoid duplicates
+                  if (!filteredStudents.find(s => s._id === student._id)) {
+                    filteredStudents.push({ ...student, className: c.name, classId: c._id });
+                  }
+                }
+              });
+            }
+          });
+        }
+
+        setSearchResults({ classes: filteredClasses.slice(0, 5), students: filteredStudents.slice(0, 5) });
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(searchData, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery, isTeacher]);
+
+  const handleSearchSelect = (type, item) => {
+    setSearchQuery('');
+    setSearchOpen(false);
+    if (type === 'class') {
+      navigate(`/classes/${item._id}`);
+    } else if (type === 'student') {
+      navigate(`/classes/${item.classId}`);
+    }
+  };
 
   // Generate notifications based on user role
   useEffect(() => {
@@ -215,13 +301,91 @@ function Layout() {
           
           <div className="flex items-center gap-3">
             {/* Search */}
-            <div className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl">
-              <Search className="h-4 w-4 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                className="bg-transparent text-sm text-white placeholder-gray-500 outline-none w-40"
-              />
+            <div className="relative" ref={searchRef}>
+              <div className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl">
+                <Search className="h-4 w-4 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder={isTeacher ? "Search classes, students..." : "Search classes..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => searchQuery && setSearchOpen(true)}
+                  className="bg-transparent text-sm text-white placeholder-gray-500 outline-none w-48"
+                />
+                {searchLoading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border border-cyan-500 border-t-transparent"></div>
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {searchOpen && (searchResults.classes.length > 0 || searchResults.students.length > 0) && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#151928] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[300px]">
+                  {/* Classes Results */}
+                  {searchResults.classes.length > 0 && (
+                    <div>
+                      <div className="px-4 py-2 bg-white/5 border-b border-white/10">
+                        <p className="text-xs font-semibold text-gray-400 uppercase">Classes</p>
+                      </div>
+                      {searchResults.classes.map((classItem) => (
+                        <button
+                          key={classItem._id}
+                          onClick={() => handleSearchSelect('class', classItem)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                            <BookOpen className="h-4 w-4 text-cyan-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{classItem.name}</p>
+                            <p className="text-xs text-gray-400 font-mono">{classItem.code}</p>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            <Users className="h-3 w-3 inline mr-1" />
+                            {classItem.students?.length || 0}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Students Results (Teachers only) */}
+                  {isTeacher && searchResults.students.length > 0 && (
+                    <div>
+                      <div className="px-4 py-2 bg-white/5 border-b border-white/10">
+                        <p className="text-xs font-semibold text-gray-400 uppercase">Students</p>
+                      </div>
+                      {searchResults.students.map((student) => (
+                        <button
+                          key={student._id}
+                          onClick={() => handleSearchSelect('student', student)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center">
+                            <span className="text-emerald-400 font-semibold text-sm">
+                              {student.name?.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{student.name}</p>
+                            <p className="text-xs text-gray-400">{student.studentId || student.email}</p>
+                          </div>
+                          <span className="text-xs text-gray-500 truncate max-w-[80px]">
+                            {student.className}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Results */}
+              {searchOpen && searchQuery && !searchLoading && searchResults.classes.length === 0 && searchResults.students.length === 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#151928] border border-white/10 rounded-xl shadow-2xl z-50 p-6 text-center min-w-[300px]">
+                  <Search className="h-8 w-8 text-gray-500 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">No results found for "{searchQuery}"</p>
+                </div>
+              )}
             </div>
             
             {/* Notifications */}
