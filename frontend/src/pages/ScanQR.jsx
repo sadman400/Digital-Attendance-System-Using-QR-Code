@@ -19,12 +19,22 @@ function ScanQR() {
   }, []);
 
   const startScanning = async () => {
-    setScanning(true);
     setResult(null);
     setError('');
     setCameraError('');
+    setScanning(true);
+
+    // Wait for the DOM element to be rendered
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
+      const element = document.getElementById('qr-reader');
+      if (!element) {
+        setCameraError('Scanner element not found. Please try again.');
+        setScanning(false);
+        return;
+      }
+
       const html5QrCode = new Html5Qrcode('qr-reader');
       scannerRef.current = html5QrCode;
 
@@ -125,23 +135,15 @@ function ScanQR() {
     setLoading(true);
 
     try {
-      const qrData = JSON.parse(decodedText);
-      
-      if (new Date() > new Date(qrData.expiresAt)) {
-        setError('This QR code has expired. Please ask your teacher to generate a new one.');
-        setLoading(false);
-        return;
-      }
-
+      // The QR code is the base64 encoded data itself
+      // Send it directly to the API
       const response = await api.post('/attendance/mark', {
-        sessionCode: qrData.sessionCode,
-        classId: qrData.classId
+        qrCode: decodedText
       });
 
       setResult({
         success: true,
-        message: response.data.message,
-        className: qrData.className
+        message: response.data.message || 'Attendance marked successfully!'
       });
     } catch (err) {
       if (err instanceof SyntaxError) {
@@ -240,11 +242,10 @@ function ScanQR() {
             <h3 className="text-2xl font-bold text-white mb-2">
               Attendance Marked!
             </h3>
-            <p className="text-gray-400 mb-2">{result.message}</p>
-            <p className="text-cyan-400 font-medium text-lg">{result.className}</p>
+            <p className="text-gray-400 mb-6">{result.message}</p>
             <button
               onClick={resetScanner}
-              className="mt-8 px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl hover:from-cyan-600 hover:to-blue-600 transition-all font-medium"
+              className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl hover:from-cyan-600 hover:to-blue-600 transition-all font-medium"
             >
               Scan Another
             </button>

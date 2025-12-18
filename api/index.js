@@ -214,10 +214,12 @@ app.delete('/api/classes/:id', auth, async (req, res) => {
   }
 });
 
-app.post('/api/classes/join', auth, async (req, res) => {
+// Support both POST /classes/join with body and POST /classes/join/:code
+app.post('/api/classes/join/:code?', auth, async (req, res) => {
   try {
-    const { code } = req.body;
-    const classItem = await Class.findOne({ code });
+    const code = req.params.code || req.body.code;
+    if (!code) return res.status(400).json({ message: 'Class code is required' });
+    const classItem = await Class.findOne({ code: code.toUpperCase() });
     if (!classItem) return res.status(404).json({ message: 'Class not found' });
     if (classItem.students.includes(req.user._id)) {
       return res.status(400).json({ message: 'Already enrolled in this class' });
@@ -271,9 +273,27 @@ app.post('/api/attendance/mark', auth, async (req, res) => {
   }
 });
 
+// Support both /attendance/my and /attendance/my-attendance
 app.get('/api/attendance/my', auth, async (req, res) => {
   try {
-    const attendance = await Attendance.find({ student: req.user._id }).populate('class', 'name code').sort({ date: -1 });
+    let query = { student: req.user._id };
+    if (req.query.classId) {
+      query.class = req.query.classId;
+    }
+    const attendance = await Attendance.find(query).populate('class', 'name code').sort({ date: -1 });
+    res.json(attendance);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.get('/api/attendance/my-attendance', auth, async (req, res) => {
+  try {
+    let query = { student: req.user._id };
+    if (req.query.classId) {
+      query.class = req.query.classId;
+    }
+    const attendance = await Attendance.find(query).populate('class', 'name code').sort({ date: -1 });
     res.json(attendance);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
