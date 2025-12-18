@@ -266,9 +266,19 @@ app.post('/api/attendance/mark', auth, async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const existingAttendance = await Attendance.findOne({ student: req.user._id, class: classItem._id, date: { $gte: today } });
     if (existingAttendance) return res.status(400).json({ message: 'Attendance already marked for today' });
-    const attendance = new Attendance({ student: req.user._id, class: classItem._id, status: 'present', qrSession: qrSession._id });
+    
+    // Determine if student is late (scanned after 2 minutes from QR creation)
+    const LATE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes grace period
+    const timeSinceCreation = Date.now() - new Date(qrSession.createdAt).getTime();
+    const status = timeSinceCreation > LATE_THRESHOLD_MS ? 'late' : 'present';
+    
+    const attendance = new Attendance({ student: req.user._id, class: classItem._id, status, qrSession: qrSession._id });
     await attendance.save();
-    res.status(201).json({ message: 'Attendance marked successfully', attendance });
+    
+    const statusMessage = status === 'late' 
+      ? 'Attendance marked as LATE (scanned after grace period)' 
+      : 'Attendance marked successfully';
+    res.status(201).json({ message: statusMessage, attendance, status });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

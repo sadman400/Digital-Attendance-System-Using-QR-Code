@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import api from '../utils/api';
-import { QrCode, CheckCircle, XCircle, Camera, AlertCircle, Sparkles } from 'lucide-react';
+import { QrCode, CheckCircle, XCircle, Camera, AlertCircle, Sparkles, Clock } from 'lucide-react';
 
 function ScanQR() {
   const [scanning, setScanning] = useState(false);
@@ -143,7 +143,8 @@ function ScanQR() {
 
       setResult({
         success: true,
-        message: response.data.message || 'Attendance marked successfully!'
+        message: response.data.message || 'Attendance marked successfully!',
+        status: response.data.status || 'present'
       });
     } catch (err) {
       if (err instanceof SyntaxError) {
@@ -236,13 +237,28 @@ function ScanQR() {
 
         {result && (
           <div className="text-center py-12">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="h-12 w-12 text-emerald-400" />
+            <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${
+              result.status === 'late' 
+                ? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/20' 
+                : 'bg-gradient-to-br from-emerald-500/20 to-green-500/20'
+            }`}>
+              {result.status === 'late' ? (
+                <Clock className="h-12 w-12 text-yellow-400" />
+              ) : (
+                <CheckCircle className="h-12 w-12 text-emerald-400" />
+              )}
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2">
-              Attendance Marked!
+            <h3 className={`text-2xl font-bold mb-2 ${
+              result.status === 'late' ? 'text-yellow-400' : 'text-white'
+            }`}>
+              {result.status === 'late' ? 'Marked as Late!' : 'Attendance Marked!'}
             </h3>
             <p className="text-gray-400 mb-6">{result.message}</p>
+            {result.status === 'late' && (
+              <p className="text-sm text-yellow-400/70 mb-4">
+                You scanned after the 2-minute grace period
+              </p>
+            )}
             <button
               onClick={resetScanner}
               className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl hover:from-cyan-600 hover:to-blue-600 transition-all font-medium"
