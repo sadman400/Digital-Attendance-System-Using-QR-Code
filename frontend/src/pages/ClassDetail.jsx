@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   ArrowLeft, 
   QrCode, 
@@ -184,10 +185,10 @@ function ClassDetail() {
           {qrData ? (
             <div className="flex flex-col items-center">
               <div className="p-4 bg-white rounded-2xl">
-                <img 
-                  src={qrData.qrImage} 
-                  alt="Attendance QR Code" 
-                  className="w-64 h-64"
+                <QRCodeSVG 
+                  value={qrData.qrCode} 
+                  size={256}
+                  level="H"
                 />
               </div>
               <div className="mt-4 text-center">
