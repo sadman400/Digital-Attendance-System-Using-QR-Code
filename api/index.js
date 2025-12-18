@@ -311,15 +311,36 @@ app.get('/api/attendance/class/:classId', auth, async (req, res) => {
 
 app.get('/api/attendance/stats/:classId', auth, async (req, res) => {
   try {
-    const classItem = await Class.findById(req.params.classId);
+    const classItem = await Class.findById(req.params.classId).populate('students', 'name email studentId');
     if (!classItem) return res.status(404).json({ message: 'Class not found' });
+    
     const attendanceRecords = await Attendance.find({ class: req.params.classId });
-    const totalStudents = classItem.students.length;
     const uniqueDates = [...new Set(attendanceRecords.map(a => a.date.toDateString()))];
     const totalClasses = uniqueDates.length || 1;
-    const presentCount = attendanceRecords.filter(a => a.status === 'present').length;
-    const averageAttendance = totalStudents > 0 && totalClasses > 0 ? Math.round((presentCount / (totalStudents * totalClasses)) * 100) : 0;
-    res.json({ totalStudents, totalClasses, presentCount, averageAttendance, attendanceRecords: attendanceRecords.length });
+    
+    // Build per-student stats array
+    const studentStats = classItem.students.map(student => {
+      const studentAttendance = attendanceRecords.filter(a => a.student.toString() === student._id.toString());
+      const presentCount = studentAttendance.filter(a => a.status === 'present').length;
+      const lateCount = studentAttendance.filter(a => a.status === 'late').length;
+      const percentage = totalClasses > 0 ? Math.round(((presentCount + lateCount) / totalClasses) * 100) : 0;
+      
+      return {
+        student: {
+          id: student._id,
+          name: student.name,
+          email: student.email,
+          studentId: student.studentId || 'N/A'
+        },
+        present: presentCount,
+        late: lateCount,
+        absent: totalClasses - presentCount - lateCount,
+        totalClasses,
+        percentage
+      };
+    });
+    
+    res.json(studentStats);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
